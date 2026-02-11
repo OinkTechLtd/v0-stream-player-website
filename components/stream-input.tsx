@@ -7,7 +7,7 @@ import { Play, Link as LinkIcon, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 function buildPlayerUrl(fileUrl: string) {
-  return `/embed/player.html?file=${encodeURIComponent(fileUrl)}`
+  return `/embed/index.html?file=${encodeURIComponent(fileUrl)}`
 }
 
 export function StreamInput() {

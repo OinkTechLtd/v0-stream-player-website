@@ -7,7 +7,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 function buildPlayerUrl(fileUrl: string) {
-  return `/embed/player.html?file=${encodeURIComponent(fileUrl)}`
+  return `/embed/index.html?file=${encodeURIComponent(fileUrl)}`
 }
 
 function PlayerContent() {

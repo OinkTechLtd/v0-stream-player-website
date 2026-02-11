@@ -1,11 +1,9 @@
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync } from 'fs';
 
 const BASE = 'https://raw.githubusercontent.com/OinkTechLtd/cdnplayerjs/main';
-const OUT = '/vercel/share/v0-project/public/embed';
+const OUT = '/home/user';
 
-mkdirSync(OUT, { recursive: true });
-
-const files = ['index.html', 'playerjs.js', 'jquery.min.js'];
+const files = ['playerjs.js'];
 
 for (const file of files) {
   console.log(`Downloading ${file}...`);
@@ -15,8 +13,9 @@ for (const file of files) {
     continue;
   }
   const text = await res.text();
-  writeFileSync(`${OUT}/${file}`, text);
-  console.log(`Saved ${file} (${text.length} bytes)`);
+  const outPath = `${OUT}/${file}`;
+  writeFileSync(outPath, text);
+  console.log(`Saved ${file} to ${outPath} (${text.length} bytes)`);
 }
 
 console.log('Done! All player files downloaded.');

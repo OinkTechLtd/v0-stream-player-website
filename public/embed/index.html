@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/gh/OinkTechLtd/cdnplayerjs@main/playerjs.js" type="text/javascript"></script>
+<style>
+body{margin:0;}
+.htm {
+width: 100%!important;
+height: 100%!important;
+}
+.banr {
+ position: fixed;
+ left: 50px;
+ top: 50px;
+ z-index: 2000000005;
+ width: 600px;
+ height: 300px;
+ overflow: visible;
+ display:none;
+}
+.krs {
+ height: 23px;
+ line-height: 23px;
+ width: 23px;
+ visibility: visible;
+ position: absolute;
+ left: -15px;
+ top: -10px;
+ cursor: pointer;
+ z-index: 100500;
+}
+.ban468 {
+ position: fixed;
+ left: 50px;
+ top: 100px;
+ z-index: 2000000005;
+ width: 550px;
+ height: 96px;
+ overflow: visible;
+ background: #ffffff;
+}
+</style>
+
+<style>
+ html,body{
+ margin:0;padding:0;width:100%;height:100%;
+ }
+</style>
+</head>
+<body>
+<div id="playerjs"></div>
+<script>
+ var ps = location.href.substr(location.href.indexOf("html?")+5).split("&");
+
+ var vs = {id:"playerjs"};
+
+ for(var i = 0; i < ps.length; i++) {
+   var p = ps[i].split("=");
+   vs[decodeURIComponent(p[0])] = decodeURIComponent(p[1]);
+ }
+
+ if(vs.file) {
+   vs.file = decodeURIComponent(vs.file);
+ }
+
+ var player = new Playerjs(vs);
+</script>
+</body>
+</html>
