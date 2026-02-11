@@ -6,11 +6,8 @@ import { useState, useCallback } from "react"
 import { Play, Link as LinkIcon, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const PLAYER_BASE_URL =
-  "https://oinktech.github.io/cdnplayerjs/index.html"
-
 function buildPlayerUrl(fileUrl: string) {
-  return `${PLAYER_BASE_URL}?file=${encodeURIComponent(fileUrl)}&parent=oinktech.blyz.ru`
+  return `/embed/player.html?file=${encodeURIComponent(fileUrl)}`
 }
 
 export function StreamInput() {
