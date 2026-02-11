@@ -1,13 +1,117 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { Suspense } from "react"
-import { Play, ArrowLeft, ExternalLink, CheckCircle2 } from "lucide-react"
+import { Suspense, useState, useCallback } from "react"
+import { Play, ArrowLeft, ExternalLink, CheckCircle2, Share2, Copy, Check } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 function buildPlayerUrl(fileUrl: string) {
   return `/embed/index.html?file=${encodeURIComponent(fileUrl)}`
+}
+
+function ShareButton({ streamUrl }: { streamUrl: string }) {
+  const [copied, setCopied] = useState(false)
+  const [shareUrl, setShareUrl] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [showPopup, setShowPopup] = useState(false)
+
+  const generateShareLink = useCallback(async () => {
+    if (shareUrl) {
+      setShowPopup(true)
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: streamUrl }),
+      })
+      const data = await res.json()
+      if (data.shareUrl) {
+        setShareUrl(data.shareUrl)
+        setShowPopup(true)
+      }
+    } catch {
+      // fallback: use current page URL
+      setShareUrl(window.location.href)
+      setShowPopup(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [streamUrl, shareUrl])
+
+  const copyToClipboard = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      const textarea = document.createElement("textarea")
+      textarea.value = shareUrl
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }, [shareUrl])
+
+  return (
+    <div className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 text-xs bg-transparent"
+        onClick={generateShareLink}
+        disabled={loading}
+      >
+        <Share2 className="h-3.5 w-3.5" />
+        {loading ? "..." : "Поделиться"}
+      </Button>
+
+      {showPopup && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowPopup(false)}
+            onKeyDown={(e) => { if (e.key === "Escape") setShowPopup(false) }}
+            role="button"
+            tabIndex={0}
+            aria-label="Закрыть"
+          />
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-card p-4 shadow-2xl">
+            <p className="mb-3 text-sm font-medium text-foreground">
+              {"Ссылка для друзей"}
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={shareUrl}
+                readOnly
+                className="h-9 flex-1 rounded-lg border border-border bg-secondary px-3 text-xs text-foreground"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button
+                variant="default"
+                size="sm"
+                className="h-9 shrink-0 gap-1.5"
+                onClick={copyToClipboard}
+              >
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? "Готово" : "Копировать"}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {"Отправьте эту ссылку друзьям — они увидят тот же поток"}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 function PlayerContent() {
@@ -49,12 +153,15 @@ function PlayerContent() {
             <span className="font-display text-sm font-bold text-foreground">StreamFlow</span>
           </Link>
         </div>
-        <Link href="/">
-          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">{'Назад'}</span>
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ShareButton streamUrl={streamUrl} />
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">{'Назад'}</span>
+            </Button>
+          </Link>
+        </div>
       </header>
 
       {/* Success notification */}

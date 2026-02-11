@@ -3,11 +3,53 @@
 import React from "react"
 
 import { useState, useCallback } from "react"
-import { Play, Link as LinkIcon, X, ExternalLink } from "lucide-react"
+import { Play, Link as LinkIcon, X, ExternalLink, Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 function buildPlayerUrl(fileUrl: string) {
   return `/embed/index.html?file=${encodeURIComponent(fileUrl)}`
+}
+
+function MobileShareButton({ streamUrl }: { streamUrl: string }) {
+  const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handleShare = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: streamUrl }),
+      })
+      const data = await res.json()
+      const link = data.shareUrl || window.location.href
+
+      if (navigator.share) {
+        await navigator.share({ title: "StreamFlow", url: link })
+      } else {
+        await navigator.clipboard.writeText(link)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    } catch {
+      // user cancelled share or copy failed
+    } finally {
+      setLoading(false)
+    }
+  }, [streamUrl])
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      disabled={loading}
+      className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
+      aria-label="Поделиться"
+    >
+      {copied ? <Check className="h-4 w-4 text-primary" /> : <Share2 className="h-4 w-4" />}
+    </button>
+  )
 }
 
 export function StreamInput() {
@@ -122,6 +164,7 @@ export function StreamInput() {
               StreamFlow Player
             </h2>
             <div className="flex items-center gap-2">
+              <MobileShareButton streamUrl={url} />
               <a
                 href={playerUrl}
                 target="_blank"
