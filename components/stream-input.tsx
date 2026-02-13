@@ -6,16 +6,7 @@ import { useState, useCallback } from "react"
 import { Play, Link as LinkIcon, X, ExternalLink, Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-function isPlaylist(url: string): boolean {
-  const lowerUrl = url.toLowerCase()
-  return lowerUrl.endsWith('.m3u') || lowerUrl.endsWith('.m3u8') || lowerUrl.includes('playlist')
-}
-
 function buildPlayerUrl(fileUrl: string) {
-  const isPlaylistUrl = isPlaylist(fileUrl)
-  if (isPlaylistUrl) {
-    return `/embed/playlist.html?playlist=${encodeURIComponent(fileUrl)}`
-  }
   return `/embed/index.html?file=${encodeURIComponent(fileUrl)}`
 }
 

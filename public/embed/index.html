@@ -47,13 +47,85 @@ height: 100%!important;
  html,body{
  margin:0;padding:0;width:100%;height:100%;
  }
+ #playlist-panel {
+   position: fixed;
+   left: 0;
+   top: 0;
+   width: 300px;
+   height: 100%;
+   background: #1a1a1a;
+   color: #fff;
+   overflow-y: auto;
+   z-index: 1000;
+   display: none;
+   flex-direction: column;
+   border-right: 1px solid #333;
+   font-family: Arial, sans-serif;
+ }
+ #playlist-panel.show {
+   display: flex;
+ }
+ #playlist-header {
+   padding: 10px;
+   background: #0a0a0a;
+   border-bottom: 1px solid #333;
+   font-weight: bold;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+ }
+ #playlist-list {
+   flex: 1;
+   overflow-y: auto;
+ }
+ .playlist-item {
+   padding: 8px 10px;
+   cursor: pointer;
+   border-bottom: 1px solid #222;
+   font-size: 13px;
+   transition: background 0.2s;
+ }
+ .playlist-item:hover {
+   background: #333;
+ }
+ .playlist-item.active {
+   background: #0066cc;
+   font-weight: bold;
+ }
+ #player-container {
+   width: 100%;
+   height: 100%;
+   display: flex;
+ }
+ #player-container.with-playlist {
+   margin-left: 300px;
+ }
+ #playerjs {
+   flex: 1;
+ }
+ #toggle-playlist {
+   cursor: pointer;
+   background: none;
+   border: none;
+   color: #fff;
+   font-size: 18px;
+   padding: 5px;
+ }
 </style>
 </head>
 <body>
-<div id="playerjs"></div>
+<div id="playlist-panel">
+  <div id="playlist-header">
+    <span>Плейлист</span>
+    <button id="toggle-playlist">✕</button>
+  </div>
+  <div id="playlist-list"></div>
+</div>
+<div id="player-container">
+  <div id="playerjs"></div>
+</div>
 <script>
  var ps = location.href.substr(location.href.indexOf("html?")+5).split("&");
-
  var vs = {id:"playerjs"};
 
  for(var i = 0; i < ps.length; i++) {
@@ -66,6 +138,167 @@ height: 100%!important;
  }
 
  var player = new Playerjs(vs);
+ var playlistData = [];
+ var playlistPanel = document.getElementById('playlist-panel');
+ var playlistList = document.getElementById('playlist-list');
+ var toggleBtn = document.getElementById('toggle-playlist');
+ var playerContainer = document.getElementById('player-container');
+ var currentIndex = 0;
+
+ toggleBtn.addEventListener('click', function() {
+   playlistPanel.classList.remove('show');
+ });
+
+ // Функция для парсинга M3U плейлиста
+ function parseM3U(content) {
+   var lines = content.split('\n');
+   var items = [];
+   var currentItem = null;
+
+   for(var i = 0; i < lines.length; i++) {
+     var line = lines[i].trim();
+     
+     if(line.startsWith('#EXTINF:')) {
+       var title = line.split(',').pop() || 'Канал';
+       currentItem = {
+         title: title.trim(),
+         url: ''
+       };
+     } else if(line && !line.startsWith('#') && currentItem) {
+       currentItem.url = line;
+       items.push(currentItem);
+       currentItem = null;
+     }
+   }
+
+   return items;
+ }
+
+ // Функция для загрузки плейлиста через CORS proxy
+ function loadPlaylist(playlistUrl) {
+   var corsProxies = [
+     'https://cors.allorigins.win/raw?url=',
+     'https://api.allorigins.win/raw?url='
+   ];
+
+   function tryLoadWithProxy(proxyIndex) {
+     if(proxyIndex >= corsProxies.length) {
+       console.error('Не удалось загрузить плейлист');
+       return;
+     }
+
+     var encodedUrl = encodeURIComponent(playlistUrl);
+     var proxyUrl = corsProxies[proxyIndex] + encodedUrl;
+
+     fetch(proxyUrl)
+       .then(function(response) {
+         if(!response.ok) throw new Error('Proxy error');
+         return response.text();
+       })
+       .then(function(content) {
+         playlistData = parseM3U(content);
+         displayPlaylist();
+         if(playlistData.length > 0) {
+           loadStream(0);
+         }
+       })
+       .catch(function(err) {
+         console.log('Прокси ' + proxyIndex + ' не сработал, пробуем следующий...');
+         tryLoadWithProxy(proxyIndex + 1);
+       });
+   }
+
+   tryLoadWithProxy(0);
+ }
+
+ // Функция для отображения плейлиста
+ function displayPlaylist() {
+   playlistList.innerHTML = '';
+   for(var i = 0; i < playlistData.length; i++) {
+     var item = playlistData[i];
+     var div = document.createElement('div');
+     div.className = 'playlist-item' + (i === 0 ? ' active' : '');
+     div.textContent = item.title;
+     div.dataset.index = i;
+     div.addEventListener('click', function() {
+       loadStream(parseInt(this.dataset.index));
+     });
+     playlistList.appendChild(div);
+   }
+
+   if(playlistData.length > 0) {
+     playlistPanel.classList.add('show');
+     playerContainer.classList.add('with-playlist');
+   }
+ }
+
+ // Функция для загрузки потока с fallback логикой
+ function loadStream(index) {
+   if(index < 0 || index >= playlistData.length) return;
+
+   currentIndex = index;
+   var stream = playlistData[index];
+   
+   // Обновить активный элемент
+   var items = playlistList.querySelectorAll('.playlist-item');
+   for(var i = 0; i < items.length; i++) {
+     items[i].classList.remove('active');
+   }
+   if(items[index]) {
+     items[index].classList.add('active');
+   }
+
+   // Пробуем загрузить поток через CORS
+   var corsProxies = [
+     'https://cors.allorigins.win/raw?url=',
+     'https://api.allorigins.win/raw?url='
+   ];
+
+   function tryStreamWithProxy(proxyIndex, streamUrl) {
+     if(proxyIndex >= corsProxies.length) {
+       // Fallback: загружаем из localStorage
+       var cached = localStorage.getItem('stream_' + stream.title);
+       if(cached) {
+         console.log('Используем кэшированный поток: ' + stream.title);
+         player.setFile(cached);
+       } else {
+         console.log('Поток недоступен: ' + stream.title);
+         alert('Поток "' + stream.title + '" недоступен');
+       }
+       return;
+     }
+
+     var encodedUrl = encodeURIComponent(streamUrl);
+     var proxyUrl = corsProxies[proxyIndex] + encodedUrl;
+
+     // Проверяем доступность потока
+     fetch(proxyUrl, {method: 'HEAD'})
+       .then(function(response) {
+         if(response.ok) {
+           // Поток доступен - используем его и кэшируем
+           player.setFile(streamUrl);
+           localStorage.setItem('stream_' + stream.title, streamUrl);
+           console.log('Поток загружен: ' + stream.title);
+         } else {
+           tryStreamWithProxy(proxyIndex + 1, streamUrl);
+         }
+       })
+       .catch(function() {
+         tryStreamWithProxy(proxyIndex + 1, streamUrl);
+       });
+   }
+
+   tryStreamWithProxy(0, stream.url);
+ }
+
+ // Если передан файл - обычный режим
+ if(vs.file) {
+   if(vs.file.toLowerCase().endsWith('.m3u') || vs.file.toLowerCase().endsWith('.m3u8')) {
+     loadPlaylist(vs.file);
+   } else {
+     player.setFile(vs.file);
+   }
+ }
 </script>
 </body>
 </html>
