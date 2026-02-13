@@ -31,8 +31,97 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Создаём плеер
-		var player = new Playerjs(vs);
+		// Проверяем содержит ли URL плейлист
+		var isPlaylist = vs.file && (vs.file.toLowerCase().includes('.m3u') || vs.file.toLowerCase().includes('playlist'));
+
+		if (isPlaylist) {
+			// Загружаем плейлист через CORS proxy
+			var proxyUrl = 'https://cors.allorigins.win/raw?url=' + encodeURIComponent(vs.file);
+			
+			fetch(proxyUrl)
+				.then(function(response) {
+					if (!response.ok) throw new Error('Network response was not ok');
+					return response.text();
+				})
+				.then(function(data) {
+					// Парсим M3U плейлист
+					var lines = data.split('\n');
+					var playlist = [];
+					
+					for (var i = 0; i < lines.length; i++) {
+						var line = lines[i].trim();
+						
+						if (line.startsWith('#EXTINF:')) {
+							var title = line.split(',').pop() || 'Канал ' + (playlist.length + 1);
+							var nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+							
+							if (nextLine && !nextLine.startsWith('#')) {
+								playlist.push({
+									title: title.trim(),
+									file: nextLine
+								});
+								i++;
+							}
+						}
+					}
+
+					// Если плейлист загружен - передаём его PlayerJS
+					if (playlist.length > 0) {
+						vs.playlist = playlist;
+						vs.file = playlist[0].file;
+						var player = new Playerjs(vs);
+					} else {
+						alert('Не удалось загрузить плейлист');
+					}
+				})
+				.catch(function(error) {
+					console.error('Ошибка при загрузке плейлиста:', error);
+					// Пробуем альтернативный proxy
+					var altProxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(vs.file);
+					
+					fetch(altProxyUrl)
+						.then(function(response) {
+							if (!response.ok) throw new Error('Alt proxy failed');
+							return response.text();
+						})
+						.then(function(data) {
+							var lines = data.split('\n');
+							var playlist = [];
+							
+							for (var i = 0; i < lines.length; i++) {
+								var line = lines[i].trim();
+								
+								if (line.startsWith('#EXTINF:')) {
+									var title = line.split(',').pop() || 'Канал ' + (playlist.length + 1);
+									var nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+									
+									if (nextLine && !nextLine.startsWith('#')) {
+										playlist.push({
+											title: title.trim(),
+											file: nextLine
+										});
+										i++;
+									}
+								}
+							}
+
+							if (playlist.length > 0) {
+								vs.playlist = playlist;
+								vs.file = playlist[0].file;
+								var player = new Playerjs(vs);
+							} else {
+								alert('Не удалось загрузить плейлист');
+							}
+						})
+						.catch(function(err) {
+							console.error('Оба прокси не сработали:', err);
+							alert('Ошибка загрузки плейлиста. Попробуйте прямую ссылку на поток.');
+						});
+				});
+		} else {
+			// Обычный файл - создаём плеер напрямую
+			var player = new Playerjs(vs);
+		}
 	</script>
 </body>
 </html>
