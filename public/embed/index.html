@@ -10,7 +10,6 @@
 			padding: 0;
 			width: 100%;
 			height: 100%;
-			background: #000;
 		}
 	</style>
 </head>
@@ -18,55 +17,6 @@
 	<div id="playerjs"></div>
 	<script src="https://cdn.jsdelivr.net/gh/OinkTechLtd/cdnplayerjs@main/playerjs.js"></script>
 	<script>
-		var CORS_PROXIES = [
-			'https://cors.allorigins.win/raw?url=',
-			'https://api.allorigins.win/raw?url=',
-			'https://corsproxy.io/?'
-		];
-
-		function getProxyUrl(originalUrl, proxyIndex) {
-			if (proxyIndex >= CORS_PROXIES.length) return null;
-			return CORS_PROXIES[proxyIndex] + encodeURIComponent(originalUrl);
-		}
-
-		function fetchWithProxy(url, maxRetries) {
-			maxRetries = maxRetries || 3;
-			
-			return new Promise(function(resolve, reject) {
-				function tryProxy(proxyIndex) {
-					if (proxyIndex >= CORS_PROXIES.length) {
-						reject(new Error('All proxies failed'));
-						return;
-					}
-
-					var proxyUrl = getProxyUrl(url, proxyIndex);
-					console.log('[v0] Trying proxy ' + proxyIndex + ': ' + proxyUrl);
-
-					fetch(proxyUrl, {
-						method: 'GET',
-						headers: {
-							'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-						}
-					})
-						.then(function(response) {
-							if (!response.ok) throw new Error('HTTP ' + response.status);
-							return response.text();
-						})
-						.then(function(data) {
-							console.log('[v0] Proxy ' + proxyIndex + ' success');
-							resolve(data);
-						})
-						.catch(function(err) {
-							console.log('[v0] Proxy ' + proxyIndex + ' failed: ' + err.message);
-							tryProxy(proxyIndex + 1);
-						});
-				}
-
-				tryProxy(0);
-			});
-		}
-
-		// Парсируем параметры из URL
 		var ps = location.href.substr(location.href.indexOf("html?") + 5).split("&");
 		var vs = { id: "playerjs" };
 
@@ -79,62 +29,24 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Проверяем содержит ли URL плейлист
-		var isPlaylist = vs.file && (vs.file.toLowerCase().includes('.m3u') || vs.file.toLowerCase().includes('playlist'));
-
-		if (isPlaylist) {
-			fetchWithProxy(vs.file)
-				.then(function(data) {
-					// Парсим M3U плейлист
-					var lines = data.split('\n');
-					var playlist = [];
-					
-					for (var i = 0; i < lines.length; i++) {
-						var line = lines[i].trim();
-						
-						if (line.startsWith('#EXTINF:')) {
-							var title = line.split(',').pop() || 'Канал ' + (playlist.length + 1);
-							var nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-							
-							if (nextLine && !nextLine.startsWith('#')) {
-								// Оборачиваем URL потока для обхода CORS через прокси
-								var streamUrl = nextLine;
-								if (streamUrl.includes('.php') || streamUrl.includes('?') || streamUrl.startsWith('http')) {
-									// Для PHP скриптов и потоков с параметрами используем прокси
-									streamUrl = 'https://cors.allorigins.win/raw?url=' + encodeURIComponent(nextLine);
-								}
-								
-								playlist.push({
-									title: title.trim(),
-									file: streamUrl
-								});
-								i++;
-							}
-						}
+		// Если плейлист - используем API
+		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
+			fetch('/api/playlist?url=' + encodeURIComponent(vs.file))
+				.then(r => r.json())
+				.then(data => {
+					if (data.playlist && data.playlist.length > 0) {
+						vs.playlist = data.playlist;
+						vs.file = data.playlist[0].file;
 					}
-
-					// Если плейлист загружен - передаём его PlayerJS
-					if (playlist.length > 0) {
-						console.log('[v0] Loaded ' + playlist.length + ' streams from playlist');
-						vs.playlist = playlist;
-						vs.file = playlist[0].file;
-						var player = new Playerjs(vs);
-					} else {
-						alert('Не удалось загрузить плейлист');
-					}
+					new Playerjs(vs);
 				})
-				.catch(function(error) {
-					console.error('[v0] Playlist loading failed:', error);
-					alert('Ошибка загрузки плейлиста: ' + error.message);
-				});
+				.catch(() => new Playerjs(vs));
 		} else {
-			// Для обычных потоков - если PHP скрипт или есть параметры, используем прокси
-			if (vs.file && (vs.file.includes('.php') || vs.file.includes('?'))) {
-				console.log('[v0] Using proxy for stream');
-				vs.file = 'https://cors.allorigins.win/raw?url=' + encodeURIComponent(vs.file);
+			// Если PHP скрипт или локальная ссылка - проксируем
+			if (vs.file && (vs.file.includes('.php') || vs.file.match(/^https?:\/\/(localhost|127|192|10)/))) {
+				vs.file = '/api/stream?url=' + encodeURIComponent(vs.file);
 			}
-			
-			var player = new Playerjs(vs);
+			new Playerjs(vs);
 		}
 	</script>
 </body>
