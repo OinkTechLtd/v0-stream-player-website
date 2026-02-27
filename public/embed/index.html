@@ -41,8 +41,11 @@
 					new Playerjs(vs);
 				})
 				.catch(() => new Playerjs(vs));
+		} else if (vs.file) {
+			// Проксируем потоки через наш API для обхода блокировок
+			vs.file = '/api/proxy?url=' + encodeURIComponent(vs.file);
+			new Playerjs(vs);
 		} else {
-			// PlayerJS сам загружает потоки - без проксирования
 			new Playerjs(vs);
 		}
 	</script>
