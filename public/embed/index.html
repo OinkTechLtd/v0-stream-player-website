@@ -29,7 +29,22 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		var player = new Playerjs(vs);
+		// Если плейлист - используем API для парсинга
+		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
+			fetch('/api/playlist?url=' + encodeURIComponent(vs.file))
+				.then(r => r.json())
+				.then(data => {
+					if (data.playlist && data.playlist.length > 0) {
+						vs.playlist = data.playlist;
+						vs.file = data.playlist[0].file;
+					}
+					new Playerjs(vs);
+				})
+				.catch(() => new Playerjs(vs));
+		} else {
+			// PlayerJS сам загружает потоки - без проксирования
+			new Playerjs(vs);
+		}
 	</script>
 </body>
 </html>
