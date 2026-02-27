@@ -37,7 +37,7 @@ export default function CreatePlaylist() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/playlists/create', {
+      const response = await fetch('/api/playlists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ streams: validStreams }),
@@ -45,10 +45,13 @@ export default function CreatePlaylist() {
 
       const data = await response.json()
       if (data.playlistId) {
-        setPlaylistUrl(`${window.location.origin}/player?url=${encodeURIComponent(`/api/playlists/${data.playlistId}.m3u`)}`)
+        const shareUrl = `/player?url=${encodeURIComponent(`/api/playlists/${data.playlistId}`)}`
+        setPlaylistUrl(`${window.location.origin}${shareUrl}`)
+      } else {
+        alert('Ошибка: ' + (data.error || 'неизвестная ошибка'))
       }
     } catch (error) {
-      console.error(error)
+      console.error('[v0] Error creating playlist:', error)
       alert('Ошибка создания плейлиста')
     } finally {
       setLoading(false)
