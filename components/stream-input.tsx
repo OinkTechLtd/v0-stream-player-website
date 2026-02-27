@@ -3,8 +3,7 @@
 import React from "react"
 
 import { useState, useCallback } from "react"
-import { Play, Link as LinkIcon, X, ExternalLink, Share2, Copy, Check, Plus } from "lucide-react"
-import Link from "next/link"
+import { Play, Link as LinkIcon, X, ExternalLink, Share2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 function buildPlayerUrl(fileUrl: string) {
@@ -130,27 +129,14 @@ export function StreamInput() {
               </p>
             )}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                type="submit"
-                size="lg"
-                className="h-14 flex-1 gap-2 rounded-xl text-base font-semibold"
-              >
-                <Play className="h-5 w-5" />
-                Смотреть поток
-              </Button>
-              <Link href="/my-playlists" className="flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="h-14 w-full gap-2 rounded-xl text-base font-semibold"
-                >
-                  <Plus className="h-5 w-5" />
-                  Мои плейлисты
-                </Button>
-              </Link>
-            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="h-14 w-full gap-2 rounded-xl text-base font-semibold"
+            >
+              <Play className="h-5 w-5" />
+              Смотреть поток
+            </Button>
           </form>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
