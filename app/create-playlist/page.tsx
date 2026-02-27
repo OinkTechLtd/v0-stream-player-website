@@ -1,20 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Copy, Check, Plus, Trash2, Download, Upload, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
+interface Stream {
+  title: string
+  url: string
+}
+
 export default function CreatePlaylistPage() {
-  const [streams, setStreams] = useState<Array<{ title: string; url: string }>>([
-    { title: '', url: '' },
-  ])
+  const [streams, setStreams] = useState<Stream[]>([{ title: '', url: '' }])
   const [m3uContent, setM3uContent] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const updateStream = (index: number, field: 'title' | 'url', value: string) => {
-    const newStreams = [...streams]
-    newStreams[index] = { ...newStreams[index], [field]: value }
+  const updateStream = (index: number, field: keyof Stream, value: string) => {
+    const newStreams = streams.map((s, i) => (i === index ? { ...s, [field]: value } : s))
     setStreams(newStreams)
   }
 
@@ -29,6 +31,7 @@ export default function CreatePlaylistPage() {
   const generateM3U = () => {
     let content = '#EXTM3U\n'
     let hasValidStream = false
+    
     for (const stream of streams) {
       if (stream.url.trim()) {
         const title = stream.title.trim() || 'Канал'
@@ -36,6 +39,7 @@ export default function CreatePlaylistPage() {
         hasValidStream = true
       }
     }
+    
     if (!hasValidStream) {
       alert('Добавьте хотя бы один поток')
       return
@@ -43,15 +47,19 @@ export default function CreatePlaylistPage() {
     setM3uContent(content)
   }
 
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(m3uContent)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(m3uContent).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   const downloadM3U = () => {
     const element = document.createElement('a')
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(m3uContent))
+    element.setAttribute(
+      'href',
+      'data:text/plain;charset=utf-8,' + encodeURIComponent(m3uContent)
+    )
     element.setAttribute('download', 'playlist.m3u')
     element.style.display = 'none'
     document.body.appendChild(element)
@@ -59,34 +67,34 @@ export default function CreatePlaylistPage() {
     document.body.removeChild(element)
   }
 
-  const uploadM3U = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadM3U = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const content = event.target?.result as string
-        const lines = content.split('\n')
-        const newStreams: Array<{ title: string; url: string }> = []
+    if (!file) return
 
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim()
-          if (line.startsWith('#EXTINF:')) {
-            const title = line.split(',').pop()?.trim() || 'Канал'
-            const nextLine = lines[i + 1]?.trim()
-            if (nextLine && !nextLine.startsWith('#')) {
-              newStreams.push({ title, url: nextLine })
-              i++
-            }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const content = event.target?.result as string
+      const lines = content.split('\n')
+      const newStreams: Stream[] = []
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim()
+        if (line.startsWith('#EXTINF:')) {
+          const title = line.split(',').pop()?.trim() || 'Канал'
+          const nextLine = lines[i + 1]?.trim()
+          if (nextLine && !nextLine.startsWith('#')) {
+            newStreams.push({ title, url: nextLine })
+            i++
           }
         }
-
-        if (newStreams.length > 0) {
-          setStreams(newStreams)
-          setM3uContent(content)
-        }
       }
-      reader.readAsText(file)
+
+      if (newStreams.length > 0) {
+        setStreams(newStreams)
+        setM3uContent(content)
+      }
     }
+    reader.readAsText(file)
   }
 
   return (
