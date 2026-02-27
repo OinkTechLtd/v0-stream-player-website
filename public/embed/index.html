@@ -29,39 +29,7 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Если плейлист - используем API для парсинга
-		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
-			fetch('/api/playlist?url=' + encodeURIComponent(vs.file))
-				.then(r => r.json())
-				.then(data => {
-					if (data.playlist && data.playlist.length > 0) {
-						// Преобразуем плейлист с поддержкой логотипов
-						vs.playlist = data.playlist.map(function(item) {
-							return {
-								title: item.title,
-								file: item.file,
-								image: item.image || undefined,
-								poster: item.image || undefined
-							};
-						});
-						vs.file = data.playlist[0].file;
-						vs.poster = data.playlist[0].image || undefined;
-					}
-					console.log('[v0] Playlist loaded, creating player');
-					new Playerjs(vs);
-				})
-				.catch(function(err) {
-					console.error('[v0] Playlist error:', err);
-					new Playerjs(vs);
-				});
-		} else if (vs.file) {
-			// Файл - проксируем потоки через наш API для обхода блокировок
-			console.log('[v0] Single file, proxying');
-			vs.file = '/api/proxy?url=' + encodeURIComponent(vs.file);
-			new Playerjs(vs);
-		} else {
-			new Playerjs(vs);
-		}
+		var player = new Playerjs(vs);
 	</script>
 </body>
 </html>

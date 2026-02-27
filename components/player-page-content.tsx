@@ -12,35 +12,15 @@ function buildPlayerUrl(fileUrl: string) {
 
 function ShareButton({ streamUrl }: { streamUrl: string }) {
   const [copied, setCopied] = useState(false)
-  const [shareUrl, setShareUrl] = useState("")
-  const [loading, setLoading] = useState(false)
   const [showPopup, setShowPopup] = useState(false)
 
-  const generateShareLink = useCallback(async () => {
-    if (shareUrl) {
-      setShowPopup(true)
-      return
-    }
-    setLoading(true)
-    try {
-      const res = await fetch("/api/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: streamUrl }),
-      })
-      const data = await res.json()
-      if (data.shareUrl) {
-        setShareUrl(data.shareUrl)
-        setShowPopup(true)
-      }
-    } catch {
-      // fallback: use current page URL
-      setShareUrl(window.location.href)
-      setShowPopup(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [streamUrl, shareUrl])
+  const shareUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/player?url=${encodeURIComponent(streamUrl)}`
+    : ''
+
+  const generateShareLink = useCallback(() => {
+    setShowPopup(true)
+  }, [])
 
   const copyToClipboard = useCallback(async () => {
     try {
@@ -66,10 +46,9 @@ function ShareButton({ streamUrl }: { streamUrl: string }) {
         size="sm"
         className="gap-1.5 text-xs bg-transparent"
         onClick={generateShareLink}
-        disabled={loading}
       >
         <Share2 className="h-3.5 w-3.5" />
-        {loading ? "..." : "Поделиться"}
+        Поделиться
       </Button>
 
       {showPopup && (
