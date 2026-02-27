@@ -139,7 +139,7 @@ export function StreamInput() {
                 <Play className="h-5 w-5" />
                 Смотреть поток
               </Button>
-              <Link href="/create-playlist" className="flex-1">
+              <Link href="/my-playlists" className="flex-1">
                 <Button
                   type="button"
                   variant="outline"
@@ -147,7 +147,7 @@ export function StreamInput() {
                   className="h-14 w-full gap-2 rounded-xl text-base font-semibold"
                 >
                   <Plus className="h-5 w-5" />
-                  Создать плейлист
+                  Мои плейлисты
                 </Button>
               </Link>
             </div>
