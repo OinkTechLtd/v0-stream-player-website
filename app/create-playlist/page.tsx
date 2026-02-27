@@ -6,15 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Plus, Trash2, Share2, Copy, Check, ArrowLeft } from 'lucide-react'
 
 export default function CreatePlaylist() {
-  const [streams, setStreams] = useState<Array<{ title: string; url: string }>>([
-    { title: '', url: '' },
+  const [streams, setStreams] = useState<Array<{ title: string; url: string; image?: string }>>([
+    { title: '', url: '', image: '' },
   ])
   const [playlistUrl, setPlaylistUrl] = useState('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const addStream = () => {
-    setStreams([...streams, { title: '', url: '' }])
+    setStreams([...streams, { title: '', url: '', image: '' }])
   }
 
   const removeStream = (index: number) => {
@@ -99,39 +99,55 @@ export default function CreatePlaylist() {
 
           <div className="space-y-4">
             {streams.map((stream, index) => (
-              <div key={index} className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-end sm:gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Название канала
-                  </label>
-                  <input
-                    type="text"
-                    value={stream.title}
-                    onChange={(e) => updateStream(index, 'title', e.target.value)}
-                    placeholder="Например: НТВ, Россия-1"
-                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-                  />
+              <div key={index} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Название канала
+                    </label>
+                    <input
+                      type="text"
+                      value={stream.title}
+                      onChange={(e) => updateStream(index, 'title', e.target.value)}
+                      placeholder="Например: НТВ, Россия-1"
+                      className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Логотип (URL)
+                    </label>
+                    <input
+                      type="text"
+                      value={stream.image || ''}
+                      onChange={(e) => updateStream(index, 'image', e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                    />
+                  </div>
                 </div>
-                <div className="flex-[2]">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Ссылка на поток
-                  </label>
-                  <input
-                    type="text"
-                    value={stream.url}
-                    onChange={(e) => updateStream(index, 'url', e.target.value)}
-                    placeholder="https://example.com/stream.m3u8"
-                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-                  />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Ссылка на поток
+                    </label>
+                    <input
+                      type="text"
+                      value={stream.url}
+                      onChange={(e) => updateStream(index, 'url', e.target.value)}
+                      placeholder="https://example.com/stream.m3u8"
+                      className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                    />
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => removeStream(index)}
+                    className="mt-6"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => removeStream(index)}
-                  className="w-full sm:w-auto"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
             ))}
           </div>
@@ -188,7 +204,7 @@ export default function CreatePlaylist() {
                 variant="outline"
                 onClick={() => {
                   setPlaylistUrl('')
-                  setStreams([{ title: '', url: '' }])
+                  setStreams([{ title: '', url: '', image: '' }])
                 }}
                 className="flex-1"
               >

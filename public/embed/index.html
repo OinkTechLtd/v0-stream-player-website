@@ -35,14 +35,28 @@
 				.then(r => r.json())
 				.then(data => {
 					if (data.playlist && data.playlist.length > 0) {
-						vs.playlist = data.playlist;
+						// Преобразуем плейлист с поддержкой логотипов
+						vs.playlist = data.playlist.map(function(item) {
+							return {
+								title: item.title,
+								file: item.file,
+								image: item.image || undefined,
+								poster: item.image || undefined
+							};
+						});
 						vs.file = data.playlist[0].file;
+						vs.poster = data.playlist[0].image || undefined;
 					}
+					console.log('[v0] Playlist loaded, creating player');
 					new Playerjs(vs);
 				})
-				.catch(() => new Playerjs(vs));
+				.catch(function(err) {
+					console.error('[v0] Playlist error:', err);
+					new Playerjs(vs);
+				});
 		} else if (vs.file) {
-			// Проксируем потоки через наш API для обхода блокировок
+			// Файл - проксируем потоки через наш API для обхода блокировок
+			console.log('[v0] Single file, proxying');
 			vs.file = '/api/proxy?url=' + encodeURIComponent(vs.file);
 			new Playerjs(vs);
 		} else {
