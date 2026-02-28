@@ -29,7 +29,36 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		var player = new Playerjs(vs);
+		// Если это плейлист - загрузи через API
+		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
+			console.log('[v0] Loading playlist:', vs.file);
+			fetch('/api/load-playlist?url=' + encodeURIComponent(vs.file))
+				.then(r => r.json())
+				.then(data => {
+					if (data.playlist && data.playlist.length > 0) {
+						console.log('[v0] Loaded ' + data.count + ' streams');
+						vs.playlist = data.playlist;
+						vs.file = data.playlist[0].file;
+						new Playerjs(vs);
+					} else {
+						console.error('[v0] No streams found');
+						new Playerjs(vs);
+					}
+				})
+				.catch(err => {
+					console.error('[v0] Playlist load error:', err);
+					new Playerjs(vs);
+				});
+		} else if (vs.file) {
+			// Если PHP скрипт или IP - проксируй через API
+			if (vs.file.includes('.php') || /^\d+\.\d+\.\d+\.\d+/.test(vs.file)) {
+				console.log('[v0] Using proxy for stream');
+				vs.file = '/api/stream-proxy?url=' + encodeURIComponent(vs.file);
+			}
+			new Playerjs(vs);
+		} else {
+			new Playerjs(vs);
+		}
 	</script>
 </body>
 </html>
