@@ -46,10 +46,12 @@ export async function GET(request: NextRequest) {
           }
 
           playlist.push({
-            title,
+            title: title,
             file: fileUrl,
             image: logo,
             poster: logo,
+            thumb: logo,
+            duration: '-1',
           })
           i++
         }

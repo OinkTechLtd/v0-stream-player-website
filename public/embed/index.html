@@ -18,7 +18,11 @@
 	<script src="https://cdn.jsdelivr.net/gh/OinkTechLtd/cdnplayerjs@main/playerjs.js"></script>
 	<script>
 		var ps = location.href.substr(location.href.indexOf("html?") + 5).split("&");
-		var vs = { id: "playerjs" };
+		var vs = { 
+			id: "playerjs",
+			autoplay: true,
+			controls: true
+		};
 
 		for (var i = 0; i < ps.length; i++) {
 			var p = ps[i].split("=");
@@ -37,9 +41,25 @@
 				.then(data => {
 					if (data.playlist && data.playlist.length > 0) {
 						console.log('[v0] Loaded ' + data.count + ' streams');
-						vs.playlist = data.playlist;
-						vs.file = data.playlist[0].file;
-						new Playerjs(vs);
+						
+						// Преобразуем в формат для PlayerJS playlist
+						var playlistItems = [];
+						for (var j = 0; j < data.playlist.length; j++) {
+							var item = data.playlist[j];
+							playlistItems.push({
+								title: item.title,
+								file: item.file,
+								image: item.image || item.poster,
+								poster: item.image || item.poster
+							});
+						}
+						
+						vs.playlist = playlistItems;
+						vs.file = playlistItems[0].file;
+						vs.poster = playlistItems[0].poster;
+						
+						console.log('[v0] Playlist ready:', playlistItems.length, 'items');
+						var player = new Playerjs(vs);
 					} else {
 						console.error('[v0] No streams found');
 						new Playerjs(vs);
