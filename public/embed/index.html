@@ -58,39 +58,68 @@
 		function loadBroadcast(playlistUrl) {
 			console.log('[v0] Loading broadcast:', playlistUrl);
 			fetch('/api/broadcast-sync?playlist=' + encodeURIComponent(playlistUrl))
-				.then(r => r.json())
+				.then(r => {
+					console.log('[v0] Broadcast sync response:', r.status);
+					return r.json();
+				})
 				.then(data => {
-					if (data.current && data.playlist) {
-						console.log('[v0] Broadcast loaded - playing:', data.current.title);
+					console.log('[v0] Broadcast data:', data);
+					
+					if (data.error) {
+						console.error('[v0] Broadcast API error:', data.error);
+						loadPlaylist(playlistUrl);
+						return;
+					}
+					
+					if (data.current && data.playlist && data.playlist.length > 0) {
+						console.log('[v0] Broadcast loaded - ' + data.playlist.length + ' videos');
+						console.log('[v0] Current: ' + data.current.title + ' at ' + data.current.timeInSeconds + '/' + data.current.duration + 's');
 						
 						vs.file = data.current.file;
 						vs.poster = data.current.logo;
 						vs.title = data.current.title;
-						
-						// Синхронизируем видео на правильное время
-						if (data.current.duration > 0) {
-							vs.currentTime = Math.floor(data.current.timeInSeconds);
-						}
+						vs.playlist = data.playlist.map(function(v) {
+							return {
+								title: v.title,
+								file: v.file,
+								poster: v.logo,
+								image: v.logo,
+								duration: v.duration
+							};
+						});
 
 						var player = new Playerjs(vs);
+						var lastIndex = data.current.index;
 						
 						// Показываем информацию о трансляции
 						updateBroadcastInfo(data);
 						
-						// Обновляем каждые 5 секунд
-						setInterval(() => {
+						// Обновляем каждые 1 секунду для синхронизации
+						var syncInterval = setInterval(() => {
 							fetch('/api/broadcast-sync?playlist=' + encodeURIComponent(playlistUrl))
 								.then(r => r.json())
 								.then(syncData => {
-									updateBroadcastInfo(syncData);
-									if (syncData.current && syncData.current.file !== data.current.file) {
-										console.log('[v0] Switching to:', syncData.current.title);
-										player.switchPlaylist(syncData.current.index);
-										data.current = syncData.current;
+									if (!syncData.error && syncData.current && syncData.broadcast) {
+										updateBroadcastInfo(syncData);
+										
+										// Проверяем изменился ли индекс видео
+										if (syncData.current.index !== lastIndex) {
+											console.log('[v0] Switching video to index ' + syncData.current.index + ': ' + syncData.current.title);
+											lastIndex = syncData.current.index;
+											
+											// Обновляем файл и переключаемся
+											vs.file = syncData.current.file;
+											vs.poster = syncData.current.logo;
+											vs.title = syncData.current.title;
+											vs.switchPlaylist(syncData.current.index);
+										}
 									}
 								})
 								.catch(err => console.error('[v0] Sync error:', err));
-						}, 5000);
+						}, 1000);
+					} else {
+						console.error('[v0] Invalid broadcast data');
+						loadPlaylist(playlistUrl);
 					}
 				})
 				.catch(err => {

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       if (line.startsWith('#EXTINF:')) {
         // Извлекаем длительность из #EXTINF (первое число)
         const durationMatch = line.match(/#EXTINF:(-?\d+)/)
-        const duration = durationMatch ? Math.abs(parseInt(durationMatch[1])) : 0
+        let duration = durationMatch ? Math.abs(parseInt(durationMatch[1])) : 0
 
         const logoMatch = line.match(/tvg-logo="([^"]+)"/)
         const logo = logoMatch ? logoMatch[1] : ''
@@ -44,6 +44,15 @@ export async function GET(request: NextRequest) {
 
         const nextLine = lines[i + 1]?.trim()
         if (nextLine && !nextLine.startsWith('#')) {
+          // Если длительность 0 или не указана, используем дефолт (5 минут для MP4, 3 часа для потоков)
+          if (duration === 0) {
+            if (nextLine.includes('.m3u8') || nextLine.includes('.ts') || nextLine.includes('http')) {
+              duration = 10800 // 3 часа для потоков
+            } else {
+              duration = 300 // 5 минут для видеофайлов (будет вычислена при загрузке)
+            }
+          }
+
           playlist.push({
             title,
             file: nextLine,
