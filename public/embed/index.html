@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>PlayerJS</title>
+	<title>PlayerJS - StreamFlow</title>
 	<style>
 		html, body {
 			margin: 0;
@@ -12,18 +12,209 @@
 			height: 100%;
 			background: #000;
 		}
+		#sync-info {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			background: rgba(0, 0, 0, 0.8);
+			color: #0f0;
+			padding: 10px 15px;
+			border-radius: 5px;
+			font-size: 12px;
+			font-family: monospace;
+			z-index: 1000;
+			display: none;
+		}
 	</style>
 </head>
 <body>
 	<div id="playerjs"></div>
+	<div id="sync-info"></div>
 	<script src="https://cdn.jsdelivr.net/gh/OinkTechLtd/cdnplayerjs@main/playerjs.js"></script>
 	<script>
-		var ps = location.href.substr(location.href.indexOf("html?") + 5).split("&");
-		var vs = { 
-			id: "playerjs",
-			autoplay: true,
-			controls: true
+		// StreamFlow M3U Stream Manager
+		var StreamFlowManager = {
+			playlist: [],
+			currentIndex: 0,
+			streamStartTime: Date.now(),
+			serverTime: Date.now(),
+			videos: [],
+			player: null,
+			syncInterval: null,
+
+			// Парсим M3U плейлист в браузере
+			parseM3U: function(content) {
+				var lines = content.split('\n');
+				var videos = [];
+				var currentTitle = '';
+				var currentLogo = '';
+
+				for (var i = 0; i < lines.length; i++) {
+					var line = lines[i].trim();
+
+					if (line.startsWith('#EXTINF:')) {
+						var logoMatch = line.match(/tvg-logo="([^"]+)"/);
+						currentLogo = logoMatch ? logoMatch[1] : '';
+						currentTitle = line.split(',').pop().trim() || 'Видео';
+					} else if (line && !line.startsWith('#')) {
+						videos.push({
+							title: currentTitle,
+							file: line,
+							logo: currentLogo,
+							duration: 300 // default 5 min
+						});
+						currentTitle = '';
+						currentLogo = '';
+					}
+				}
+				return videos;
+			},
+
+			// Получаем общее время потока со смещением серверного времени
+			getStreamTime: function() {
+				var elapsed = Date.now() - this.streamStartTime;
+				return elapsed;
+			},
+
+			// Вычисляем какой видеофайл должен воспроизводиться сейчас
+			getCurrentVideo: function() {
+				var streamTime = this.getStreamTime();
+				var totalTime = 0;
+
+				for (var i = 0; i < this.videos.length; i++) {
+					var duration = this.videos[i].duration * 1000; // ms
+					if (streamTime < totalTime + duration) {
+						// Это текущий видеофайл
+						var timeInVideo = streamTime - totalTime;
+						return {
+							index: i,
+							video: this.videos[i],
+							timeInVideo: timeInVideo,
+							duration: duration
+						};
+					}
+					totalTime += duration;
+				}
+
+				// Циклически повторяем плейлист
+				return this.getCurrentVideo();
+			},
+
+			// Синхронизируем с сервером (получаем серверное время)
+			syncWithServer: function() {
+				var self = this;
+				fetch('/api/sync-time', { cache: 'no-store' })
+					.then(r => r.json())
+					.then(data => {
+						if (data.serverTime) {
+							self.serverTime = data.serverTime;
+							// Пересчитываем потоковое время на основе серверного времени
+							self.streamStartTime = self.serverTime - self.getStreamTime();
+						}
+					})
+					.catch(err => console.log('[v0] Server sync unavailable, using local time'));
+			},
+
+			// Загружаем M3U плейлист и инициализируем поток
+			initializeStream: function(playlistUrl) {
+				var self = this;
+				console.log('[v0] Loading M3U playlist:', playlistUrl);
+
+				fetch(playlistUrl)
+					.then(r => r.text())
+					.then(content => {
+						self.videos = self.parseM3U(content);
+						console.log('[v0] Parsed ' + self.videos.length + ' videos from M3U');
+
+						if (self.videos.length === 0) {
+							console.error('[v0] No videos found in M3U');
+							return;
+						}
+
+						// Синхронизируем время с сервером
+						self.syncWithServer();
+
+						// Создаём плейлист для PlayerJS
+						var playlistItems = [];
+						for (var j = 0; j < self.videos.length; j++) {
+							var v = self.videos[j];
+							playlistItems.push({
+								title: v.title,
+								file: v.file,
+								poster: v.logo,
+								image: v.logo
+							});
+						}
+
+						// Получаем текущее видео
+						var current = self.getCurrentVideo();
+						console.log('[v0] Stream initialized - current video:', current.video.title);
+
+						// Инициализируем плеер
+						var playerConfig = {
+							id: 'playerjs',
+							file: current.video.file,
+							poster: current.video.logo,
+							title: current.video.title,
+							playlist: playlistItems,
+							autoplay: true,
+							controls: true,
+							autoplayPlaylist: false // Мы сами управляем переключением
+						};
+
+						self.player = new Playerjs(playerConfig);
+
+						// Синхронизируем плеер каждую секунду
+						self.startSync();
+					})
+					.catch(err => {
+						console.error('[v0] Error loading M3U:', err);
+					});
+			},
+
+			// Синхронизируем текущее видео в плеере с виртуальным потоком
+			startSync: function() {
+				var self = this;
+
+				this.syncInterval = setInterval(() => {
+					var current = self.getCurrentVideo();
+					
+					// Если индекс видео изменился - переключаемся
+					if (current.index !== self.currentIndex) {
+						console.log('[v0] Switching to video ' + (current.index + 1) + ': ' + current.video.title);
+						self.currentIndex = current.index;
+						
+						// Переключаем файл в плеере
+						self.player.switchPlaylist(current.index);
+					}
+
+					// Обновляем информацию о синхронизации
+					self.updateSyncInfo(current);
+				}, 1000);
+			},
+
+			// Показываем информацию о синхронизации
+			updateSyncInfo: function(current) {
+				var info = document.getElementById('sync-info');
+				var mins = Math.floor(current.timeInVideo / 60000);
+				var secs = Math.floor((current.timeInVideo % 60000) / 1000);
+				var totalMins = Math.floor(current.duration / 60000);
+				var totalSecs = Math.floor((current.duration % 60000) / 1000);
+
+				info.innerHTML = 
+					'<div>📺 StreamFlow Live</div>' +
+					'<div style="margin-top: 5px;">' + current.video.title + '</div>' +
+					'<div style="margin-top: 3px; font-size: 11px;">' +
+					mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' +
+					totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs +
+					'</div>';
+				info.style.display = 'block';
+			}
 		};
+
+		// Инициализация плеера
+		var ps = location.href.substr(location.href.indexOf("html?") + 5).split("&");
+		var vs = {};
 
 		for (var i = 0; i < ps.length; i++) {
 			var p = ps[i].split("=");
@@ -34,80 +225,18 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Если это M3U плейлист - загрузи как синхронизированный поток (как M3U8)
+		// Если это M3U плейлист - используем StreamFlow Manager
 		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
-			console.log('[v0] Loading M3U as synchronized stream:', vs.file);
-			
-			function loadSyncStream() {
-				fetch('/api/sync-stream?playlist=' + encodeURIComponent(vs.file))
-					.then(r => r.json())
-					.then(data => {
-						if (data.error) {
-							console.error('[v0] Sync error:', data.error);
-							return;
-						}
-						
-						console.log('[v0] Sync data - index:', data.currentIndex, 'video:', data.currentVideo.title, 'time:', data.currentVideo.timeInSeconds + '/' + data.currentVideo.duration);
-						
-						if (data.currentVideo && data.playlist) {
-							// Преобразуем в формат PlayerJS
-							var items = [];
-							for (var j = 0; j < data.playlist.length; j++) {
-								var item = data.playlist[j];
-								items.push({
-									title: item.title || ('Видео ' + (j + 1)),
-									file: item.file,
-									poster: item.logo,
-									image: item.logo,
-									duration: item.duration
-								});
-							}
-							
-							vs.playlist = items;
-							vs.file = data.currentVideo.file;
-							vs.poster = data.currentVideo.logo;
-							vs.title = data.currentVideo.title;
-							vs.autoplayPlaylist = true;
-							
-							// Создаём плеер при первой загрузке
-							if (!window.playerInstance) {
-								window.playerInstance = new Playerjs(vs);
-								console.log('[v0] Player created');
-							}
-							
-							// Запоминаем последний индекс
-							window.lastIndex = data.currentIndex;
-						}
-					})
-					.catch(err => console.error('[v0] Sync stream error:', err));
-			}
-			
-			// Загружаем один раз при запуске
-			loadSyncStream();
-			
-			// Проверяем каждые 2 секунды изменился ли текущий видеофайл
-			setInterval(() => {
-				fetch('/api/sync-stream?playlist=' + encodeURIComponent(vs.file))
-					.then(r => r.json())
-					.then(data => {
-						if (!data.error && data.currentIndex !== window.lastIndex && window.playerInstance) {
-							console.log('[v0] Switching to index', data.currentIndex, ':', data.currentVideo.title);
-							window.lastIndex = data.currentIndex;
-							// Переключаем видео в плеере
-							window.playerInstance.switchPlaylist(data.currentIndex);
-						}
-					})
-					.catch(err => console.error('[v0] Sync check error:', err));
-			}, 2000);
-		} 
+			StreamFlowManager.initializeStream(vs.file);
+		}
 		// Если PHP скрипт или IP адрес - проксируй
 		else if (vs.file && (vs.file.includes('.php') || /^\d+\.\d+\.\d+\.\d+/.test(vs.file))) {
 			console.log('[v0] Using stream proxy');
 			vs.file = '/api/stream-proxy?url=' + encodeURIComponent(vs.file);
 			new Playerjs(vs);
 		}
-		// Обычный видеофайл
-		else {
+		// Обычный видеофайл или поток
+		else if (vs.file) {
 			new Playerjs(vs);
 		}
 	</script>
