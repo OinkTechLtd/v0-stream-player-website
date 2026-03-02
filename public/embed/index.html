@@ -34,42 +34,71 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Если это M3U плейлист - загрузи и настрой как плейлист для воспроизведения
+		// Если это M3U плейлист - загрузи как синхронизированный поток (как M3U8)
 		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
-			console.log('[v0] Loading M3U playlist:', vs.file);
-			fetch('/api/load-playlist?url=' + encodeURIComponent(vs.file))
-				.then(r => r.json())
-				.then(data => {
-					console.log('[v0] Loaded playlist with ' + data.playlist.length + ' items');
-					
-					if (data.playlist && data.playlist.length > 0) {
-						// Преобразуем в формат PlayerJS
-						var items = [];
-						for (var j = 0; j < data.playlist.length; j++) {
-							var item = data.playlist[j];
-							items.push({
-								title: item.title || ('Видео ' + (j + 1)),
-								file: item.file,
-								poster: item.image || item.poster,
-								image: item.image || item.poster
-							});
+			console.log('[v0] Loading M3U as synchronized stream:', vs.file);
+			
+			function loadSyncStream() {
+				fetch('/api/sync-stream?playlist=' + encodeURIComponent(vs.file))
+					.then(r => r.json())
+					.then(data => {
+						if (data.error) {
+							console.error('[v0] Sync error:', data.error);
+							return;
 						}
 						
-						// Устанавливаем плейлист - PlayerJS автоматически переключается между видео
-						vs.playlist = items;
-						vs.file = items[0].file;
-						vs.poster = items[0].poster;
-						vs.autoplayPlaylist = true; // Автоматически переключать видео
-						vs.preload = 'auto';
+						console.log('[v0] Sync data - index:', data.currentIndex, 'video:', data.currentVideo.title, 'time:', data.currentVideo.timeInSeconds + '/' + data.currentVideo.duration);
 						
-						console.log('[v0] Playlist ready, creating player');
-						new Playerjs(vs);
-					}
-				})
-				.catch(err => {
-					console.error('[v0] Error loading playlist:', err);
-					new Playerjs(vs);
-				});
+						if (data.currentVideo && data.playlist) {
+							// Преобразуем в формат PlayerJS
+							var items = [];
+							for (var j = 0; j < data.playlist.length; j++) {
+								var item = data.playlist[j];
+								items.push({
+									title: item.title || ('Видео ' + (j + 1)),
+									file: item.file,
+									poster: item.logo,
+									image: item.logo,
+									duration: item.duration
+								});
+							}
+							
+							vs.playlist = items;
+							vs.file = data.currentVideo.file;
+							vs.poster = data.currentVideo.logo;
+							vs.title = data.currentVideo.title;
+							vs.autoplayPlaylist = true;
+							
+							// Создаём плеер при первой загрузке
+							if (!window.playerInstance) {
+								window.playerInstance = new Playerjs(vs);
+								console.log('[v0] Player created');
+							}
+							
+							// Запоминаем последний индекс
+							window.lastIndex = data.currentIndex;
+						}
+					})
+					.catch(err => console.error('[v0] Sync stream error:', err));
+			}
+			
+			// Загружаем один раз при запуске
+			loadSyncStream();
+			
+			// Проверяем каждые 2 секунды изменился ли текущий видеофайл
+			setInterval(() => {
+				fetch('/api/sync-stream?playlist=' + encodeURIComponent(vs.file))
+					.then(r => r.json())
+					.then(data => {
+						if (!data.error && data.currentIndex !== window.lastIndex && window.playerInstance) {
+							console.log('[v0] Switching to index', data.currentIndex, ':', data.currentVideo.title);
+							window.lastIndex = data.currentIndex;
+							// Переключаем видео в плеере
+							window.playerInstance.switchPlaylist(data.currentIndex);
+						}
+					})
+					.catch(err => console.error('[v0] Sync check error:', err));
+			}, 2000);
 		} 
 		// Если PHP скрипт или IP адрес - проксируй
 		else if (vs.file && (vs.file.includes('.php') || /^\d+\.\d+\.\d+\.\d+/.test(vs.file))) {
