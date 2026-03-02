@@ -11,17 +11,39 @@
 			width: 100%;
 			height: 100%;
 		}
+		#broadcast-info {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			background: rgba(0, 0, 0, 0.8);
+			color: #fff;
+			padding: 10px 15px;
+			border-radius: 5px;
+			font-size: 12px;
+			font-family: Arial, sans-serif;
+			z-index: 1000;
+			display: none;
+		}
+		#broadcast-info.show {
+			display: block;
+		}
 	</style>
 </head>
 <body>
 	<div id="playerjs"></div>
+	<div id="broadcast-info">
+		<div>📺 <span id="viewers">0</span> смотрят</div>
+		<div id="current-title" style="margin-top: 5px; font-weight: bold;"></div>
+		<div id="progress-info" style="margin-top: 3px; font-size: 11px;"></div>
+	</div>
 	<script src="https://cdn.jsdelivr.net/gh/OinkTechLtd/cdnplayerjs@main/playerjs.js"></script>
 	<script>
 		var ps = location.href.substr(location.href.indexOf("html?") + 5).split("&");
 		var vs = { 
 			id: "playerjs",
 			autoplay: true,
-			controls: true
+			controls: true,
+			seekbar: true
 		};
 
 		for (var i = 0; i < ps.length; i++) {
@@ -33,16 +55,57 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Если это плейлист - загрузи через API
-		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
-			console.log('[v0] Loading playlist:', vs.file);
-			fetch('/api/load-playlist?url=' + encodeURIComponent(vs.file))
+		function loadBroadcast(playlistUrl) {
+			console.log('[v0] Loading broadcast:', playlistUrl);
+			fetch('/api/broadcast-sync?playlist=' + encodeURIComponent(playlistUrl))
+				.then(r => r.json())
+				.then(data => {
+					if (data.current && data.playlist) {
+						console.log('[v0] Broadcast loaded - playing:', data.current.title);
+						
+						vs.file = data.current.file;
+						vs.poster = data.current.logo;
+						vs.title = data.current.title;
+						
+						// Синхронизируем видео на правильное время
+						if (data.current.duration > 0) {
+							vs.currentTime = Math.floor(data.current.timeInSeconds);
+						}
+
+						var player = new Playerjs(vs);
+						
+						// Показываем информацию о трансляции
+						updateBroadcastInfo(data);
+						
+						// Обновляем каждые 5 секунд
+						setInterval(() => {
+							fetch('/api/broadcast-sync?playlist=' + encodeURIComponent(playlistUrl))
+								.then(r => r.json())
+								.then(syncData => {
+									updateBroadcastInfo(syncData);
+									if (syncData.current && syncData.current.file !== data.current.file) {
+										console.log('[v0] Switching to:', syncData.current.title);
+										player.switchPlaylist(syncData.current.index);
+										data.current = syncData.current;
+									}
+								})
+								.catch(err => console.error('[v0] Sync error:', err));
+						}, 5000);
+					}
+				})
+				.catch(err => {
+					console.error('[v0] Broadcast load error:', err);
+					// Fallback на обычный плейлист
+					loadPlaylist(playlistUrl);
+				});
+		}
+
+		function loadPlaylist(playlistUrl) {
+			console.log('[v0] Loading playlist:', playlistUrl);
+			fetch('/api/load-playlist?url=' + encodeURIComponent(playlistUrl))
 				.then(r => r.json())
 				.then(data => {
 					if (data.playlist && data.playlist.length > 0) {
-						console.log('[v0] Loaded ' + data.count + ' streams');
-						
-						// Преобразуем в формат для PlayerJS playlist
 						var playlistItems = [];
 						for (var j = 0; j < data.playlist.length; j++) {
 							var item = data.playlist[j];
@@ -58,21 +121,35 @@
 						vs.file = playlistItems[0].file;
 						vs.poster = playlistItems[0].poster;
 						
-						console.log('[v0] Playlist ready:', playlistItems.length, 'items');
-						var player = new Playerjs(vs);
-					} else {
-						console.error('[v0] No streams found');
 						new Playerjs(vs);
 					}
 				})
-				.catch(err => {
-					console.error('[v0] Playlist load error:', err);
-					new Playerjs(vs);
-				});
+				.catch(err => console.error('[v0] Playlist error:', err));
+		}
+
+		function updateBroadcastInfo(data) {
+			var info = document.getElementById('broadcast-info');
+			document.getElementById('viewers').textContent = data.viewers || 0;
+			document.getElementById('current-title').textContent = data.current.title;
+			
+			var mins = Math.floor(data.current.timeInSeconds / 60);
+			var secs = Math.floor(data.current.timeInSeconds % 60);
+			var totalMins = Math.floor(data.current.duration / 60);
+			var totalSecs = Math.floor(data.current.duration % 60);
+			
+			document.getElementById('progress-info').textContent = 
+				mins + ':' + (secs < 10 ? '0' : '') + secs + ' / ' +
+				totalMins + ':' + (totalSecs < 10 ? '0' : '') + totalSecs;
+			
+			info.classList.add('show');
+		}
+
+		// Если это плейлист - загрузи как трансляцию
+		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
+			loadBroadcast(vs.file);
 		} else if (vs.file) {
 			// Если PHP скрипт или IP - проксируй через API
 			if (vs.file.includes('.php') || /^\d+\.\d+\.\d+\.\d+/.test(vs.file)) {
-				console.log('[v0] Using proxy for stream');
 				vs.file = '/api/stream-proxy?url=' + encodeURIComponent(vs.file);
 			}
 			new Playerjs(vs);
