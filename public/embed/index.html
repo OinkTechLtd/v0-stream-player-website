@@ -29,31 +29,46 @@
 			vs.file = decodeURIComponent(vs.file);
 		}
 
-		// Поддержка M3U потока
-		if (vs.file && vs.file.toLowerCase().includes('.m3u')) {
+		// Если это M3U плейлист - загружаем и включаем автоматическое переключение видео
+		if (vs.file && (vs.file.toLowerCase().includes('.m3u') || vs.file.toLowerCase().includes('.txt'))) {
 			fetch(vs.file)
 				.then(r => r.text())
 				.then(content => {
 					var lines = content.split('\n');
-					var segments = [];
-					var titles = [];
+					var playlist = [];
+					var currentTitle = '';
 					
 					for (var i = 0; i < lines.length; i++) {
 						var line = lines[i].trim();
+						
 						if (line.startsWith('#EXTINF:')) {
-							titles.push(line.split(',').pop().trim() || 'Видео');
+							currentTitle = line.split(',').pop().trim() || 'Видео';
 						} else if (line && !line.startsWith('#')) {
-							segments.push(line);
+							playlist.push({
+								file: line,
+								title: currentTitle || 'Видео'
+							});
+							currentTitle = '';
 						}
 					}
 					
-					if (segments.length > 0) {
-						vs.file = segments;
-						vs.live = true;
+					if (playlist.length > 0) {
+						// Первый файл для воспроизведения
+						vs.file = playlist[0].file;
+						
+						// Полный плейлист для автоматического переключения
+						vs.playlist = playlist;
+						
+						// Автоматически переключаться между видео
+						vs.autoplayPlaylist = true;
+						
 						new Playerjs(vs);
 					}
 				})
-				.catch(err => new Playerjs(vs));
+				.catch(err => {
+					// Fallback на обычное воспроизведение
+					new Playerjs(vs);
+				});
 		} else {
 			new Playerjs(vs);
 		}
